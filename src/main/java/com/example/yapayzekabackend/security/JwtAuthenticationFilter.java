@@ -29,6 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         final String authorizationHeader = request.getHeader("Authorization");
+        System.out.println("Request URL: " + request.getRequestURI());
+        System.out.println("Authorization header: " + authorizationHeader);
 
         String username = null;
         String jwt = null;
@@ -37,21 +39,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             jwt = authorizationHeader.substring(7);
             try {
                 username = jwtTokenUtil.extractUsername(jwt);
+                System.out.println("JWT username: " + username);
             } catch (Exception e) {
-                logger.error("JWT token is invalid", e);
+                System.out.println("JWT token is invalid: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+            System.out.println("UserDetails loaded: " + userDetails.getUsername());
 
-            if (jwtTokenUtil.validateToken(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            try {
+                boolean isValid = jwtTokenUtil.validateToken(jwt, userDetails);
+                System.out.println("Token validation result: " + isValid);
+
+                if (isValid) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    System.out.println("Authentication set in SecurityContext");
+                }
+            } catch (Exception e) {
+                System.out.println("Token validation error: " + e.getMessage());
+                e.printStackTrace();
             }
         }
+
         chain.doFilter(request, response);
     }
 }

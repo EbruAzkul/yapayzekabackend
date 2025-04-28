@@ -2,41 +2,32 @@ package com.example.yapayzekabackend.service;
 
 import com.example.yapayzekabackend.model.Appointment;
 import com.example.yapayzekabackend.repository.AppointmentRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class AppointmentService {
-
     private final AppointmentRepository appointmentRepository;
-
-    @Autowired
-    public AppointmentService(AppointmentRepository appointmentRepository) {
-        this.appointmentRepository = appointmentRepository;
-    }
 
     public Appointment createAppointment(Appointment appointment) {
         return appointmentRepository.save(appointment);
     }
 
-
     public List<Appointment> getAllAppointments() {
         return appointmentRepository.findAll();
     }
-
 
     public List<Appointment> findByUserId(Long userId) {
         return appointmentRepository.findByUserId(userId);
     }
 
-
     public Optional<Appointment> findById(Long id) {
         return appointmentRepository.findById(id);
     }
-
 
     public Appointment updateStatus(Long id, String status) {
         Appointment appointment = appointmentRepository.findById(id)
@@ -57,6 +48,23 @@ public class AppointmentService {
 
         appointment.setStatus("CANCELLED");
         appointmentRepository.save(appointment);
+    }
+
+    public boolean cancelAppointmentForUser(Long appointmentId, Long userId) {
+        Optional<Appointment> appointmentOpt = appointmentRepository.findById(appointmentId);
+
+        if (appointmentOpt.isPresent()) {
+            Appointment appointment = appointmentOpt.get();
+
+            // Kullanıcı kontrolü
+            if (appointment.getUser().getId().equals(userId)) {
+                appointment.setStatus("CANCELLED");
+                appointmentRepository.save(appointment);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private boolean isValidStatus(String status) {

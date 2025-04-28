@@ -20,11 +20,16 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         Optional<User> user = userService.findByEmail(email);
         if (user.isEmpty()) {
-            throw new UsernameNotFoundException("Kullanici bulunamadi: " + email);
+            throw new UsernameNotFoundException("Kullanıcı bulunamadı: " + email);
         }
+
+        // Log ekleyin
+        System.out.println("CustomUserDetailsService: " + email + " için kullanıcı bulundu");
+
         return new org.springframework.security.core.userdetails.User(
                 user.get().getEmail(),
                 user.get().getPassword(),
-                new ArrayList<>());
+                new ArrayList<>()
+        );
     }
 }

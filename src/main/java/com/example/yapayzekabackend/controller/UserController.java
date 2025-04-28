@@ -1,15 +1,19 @@
 package com.example.yapayzekabackend.controller;
 
+import com.example.yapayzekabackend.model.Appointment;
 import com.example.yapayzekabackend.model.User;
+import com.example.yapayzekabackend.service.AppointmentService;
 import com.example.yapayzekabackend.service.UserService;
 import com.example.yapayzekabackend.repository.DiagnosisRepository;
 import com.example.yapayzekabackend.dto.DiagnosisDTO;
 import com.example.yapayzekabackend.model.Diagnosis;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -22,6 +26,9 @@ public class UserController {
 
     @Autowired
     private DiagnosisRepository diagnosisRepository;
+
+    @Autowired
+    private AppointmentService appointmentService; // Eksik olan servis
 
     // 🔍 Belirli bir kullanıcının (publicId ile) teşhislerini getir
     @GetMapping("/{publicId}/diagnoses")
@@ -37,13 +44,6 @@ public class UserController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(userDiagnoses);
-    }
-
-    // 📝 Yeni kullanıcı kaydı
-    @PostMapping("/register")
-    public ResponseEntity<User> registerUser(@RequestBody User user) {
-        User saved = userService.save(user);
-        return ResponseEntity.ok(saved);
     }
 
     // 🔍 publicId ile kullanıcı bilgilerini getir
@@ -78,5 +78,42 @@ public class UserController {
             @PathVariable String publicId,
             @RequestBody User userDetails) {
         return ResponseEntity.ok(userService.updateUser(publicId, userDetails));
+    }
+
+    @GetMapping("/{publicId}/appointments")
+    public ResponseEntity<List<Appointment>> getUserAppointments(@PathVariable String publicId) {
+        Optional<User> userOpt = userService.findByPublicId(publicId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        List<Appointment> appointments = appointmentService.findByUserId(userOpt.get().getId());
+        return ResponseEntity.ok(appointments);
+    }
+
+    @DeleteMapping("/appointments/{appointmentId}")
+    public ResponseEntity<?> cancelAppointment(
+            @PathVariable Long appointmentId,
+            @RequestParam String userPublicId) {
+
+        try {
+            // Kullanıcı kontrolü - sadece kendi randevusunu iptal edebilir
+            Optional<User> userOpt = userService.findByPublicId(userPublicId);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("message", "Kullanıcı bulunamadı"));
+            }
+
+            boolean success = appointmentService.cancelAppointmentForUser(appointmentId, userOpt.get().getId());
+
+            if (success) {
+                return ResponseEntity.ok(Map.of("message", "Randevu başarıyla iptal edildi"));
+            } else {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Randevu iptal edilemedi. Randevu bu kullanıcıya ait olmayabilir."));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }

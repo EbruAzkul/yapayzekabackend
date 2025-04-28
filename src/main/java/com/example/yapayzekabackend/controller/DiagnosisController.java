@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,16 +60,25 @@ public class DiagnosisController {
             @RequestParam(value = "notes", required = false) String notes) {
 
         try {
-            Optional<User> user = userService.findByPublicId(publicId);
-            if (user.isEmpty()) {
+            Optional<User> userOpt = userService.findByPublicId(publicId);
+            if (userOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("message", "Kullanıcı bulunamadı"));
             }
 
-            // TODO: Burada gerçek kullanıcı ile teşhis oluşturma metodu çağrılacak
-            // Diagnosis diagnosis = diagnosisService.createDiagnosis(user.get(), imageFile, notes);
-            return ResponseEntity.ok(Map.of("message", "Bu fonksiyon henüz implemente edilmedi"));
-        } catch (Exception e) {
+            User user = userOpt.get();
+            Diagnosis diagnosis = diagnosisService.createDiagnosis(user, imageFile, notes);
+
+            // Teşhis sonucuna göre doktor önerilerini de getir
+            List<Doctor> recommendedDoctors = diagnosisService.getRecommendedDoctors(diagnosis.getId());
+
+            // Yanıt nesnesini oluştur
+            Map<String, Object> response = new HashMap<>();
+            response.put("diagnosis", new DiagnosisDTO(diagnosis));
+            response.put("recommendedDoctors", recommendedDoctors);
+
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Teşhis oluşturulurken hata: " + e.getMessage()));
         }
@@ -99,6 +109,20 @@ public class DiagnosisController {
         }
     }
 
+    @GetMapping("/{diagnosisId}/recommended-doctors")
+    public ResponseEntity<?> getRecommendedDoctors(@PathVariable Long diagnosisId) {
+        Optional<Diagnosis> diagnosisOpt = diagnosisService.getDiagnosisById(diagnosisId);
+
+        if (diagnosisOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Teşhis bulunamadı"));
+        }
+
+        List<Doctor> recommendedDoctors = diagnosisService.getRecommendedDoctors(diagnosisId);
+
+        return ResponseEntity.ok(recommendedDoctors);
+    }
+
     @PostMapping("/{diagnosisId}/appointments")
     public ResponseEntity<?> createAppointment(
             @PathVariable Long diagnosisId,
@@ -126,4 +150,6 @@ public class DiagnosisController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
+
+
 }

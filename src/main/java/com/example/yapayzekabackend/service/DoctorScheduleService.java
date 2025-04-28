@@ -1,10 +1,12 @@
 package com.example.yapayzekabackend.service;
 
 import com.example.yapayzekabackend.model.Appointment;
+import com.example.yapayzekabackend.model.Doctor;
 import com.example.yapayzekabackend.model.DoctorSchedule;
+import com.example.yapayzekabackend.model.User;
 import com.example.yapayzekabackend.repository.AppointmentRepository;
 import com.example.yapayzekabackend.repository.DoctorScheduleRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -12,16 +14,25 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class DoctorScheduleService {
 
-    private final DoctorScheduleRepository scheduleRepository;
-    private final AppointmentRepository appointmentRepository;
+    @Autowired
+    private DoctorScheduleRepository scheduleRepository;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+
+    @Autowired
+    private DoctorService doctorService;
+
+    @Autowired
+    private UserService userService;
 
     // Sabit değerler
     private static final int APPOINTMENT_DURATION_MINUTES = 30;
@@ -39,10 +50,6 @@ public class DoctorScheduleService {
         return scheduleRepository.findByDoctorId(doctorId);
     }
 
-    public Optional<DoctorSchedule> findById(Long id) {
-        return scheduleRepository.findById(id);
-    }
-
     public List<LocalTime> getAvailableTimeSlots(Long doctorId, LocalDate date) {
         // 1. O gün için doktorun çalışma saatlerini bul
         DayOfWeek dayOfWeek = date.getDayOfWeek();
@@ -57,7 +64,7 @@ public class DoctorScheduleService {
 
         for (DoctorSchedule schedule : schedules) {
             if (!schedule.isAvailable()) {
-                continue; // Eğer çalışma saati aktif değilse atla
+                continue; // Çalışma saati aktif değilse atla
             }
 
             LocalTime current = schedule.getStartTime();
@@ -83,6 +90,54 @@ public class DoctorScheduleService {
         return allPossibleSlots.stream()
                 .filter(time -> !bookedTimes.contains(time))
                 .collect(Collectors.toList());
+    }
+
+    public Map<String, List<String>> getAvailableSlotsForWeek(Long doctorId) {
+        Map<String, List<String>> weekSlots = new HashMap<>();
+        LocalDate today = LocalDate.now();
+
+        // Bugün ve sonraki 6 gün için müsait saatleri getir
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = today.plusDays(i);
+            List<LocalTime> timeSlots = getAvailableTimeSlots(doctorId, date);
+
+            // Saatleri string formatına çevir
+            List<String> formattedSlots = timeSlots.stream()
+                    .map(time -> time.toString())
+                    .collect(Collectors.toList());
+
+            weekSlots.put(date.toString(), formattedSlots);
+        }
+
+        return weekSlots;
+    }
+
+    public Appointment bookAppointment(Long doctorId, String userPublicId, LocalDateTime dateTime) {
+        // Doktor ve kullanıcıyı bul
+        Doctor doctor = doctorService.findById(doctorId)
+                .orElseThrow(() -> new RuntimeException("Doktor bulunamadı"));
+
+        User user = userService.findByPublicId(userPublicId)
+                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+
+        // O zaman dilimi müsait mi kontrol et
+        LocalDate date = dateTime.toLocalDate();
+        LocalTime time = dateTime.toLocalTime();
+
+        List<LocalTime> availableSlots = getAvailableTimeSlots(doctorId, date);
+        if (!availableSlots.contains(time)) {
+            throw new RuntimeException("Seçilen zaman dilimi müsait değil");
+        }
+
+        // Yeni randevu oluştur
+        Appointment appointment = Appointment.builder()
+                .user(user)
+                .doctor(doctor)
+                .appointmentDate(dateTime)
+                .status("SCHEDULED")
+                .build();
+
+        return appointmentRepository.save(appointment);
     }
 
     public void deleteSchedule(Long id) {
